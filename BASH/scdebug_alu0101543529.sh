@@ -20,6 +20,8 @@
   DO_COMMAND=false
   STOP_FLAG=false
   G_FLAG=false
+  GC_FLAG=false
+  GE_FLAG=false
 
 # ----------------------------FUNCIONES------------------------------
 
@@ -29,9 +31,13 @@
     if [ "$STOP_FLAG" == true ]; then
       usage_stop
       exit 0
+    # Si el usuario ha seleccionado la opción -h, haciendo uso de la opción -g | -gc | -ge mostraremos otra función de ayuda especifica para la opción
+    elif [ $G_FLAG == true ] || [ $GE_FLAG == true ] || [ $GC_FLAG == true ]; then
+      usage_g
+      exit 0
     else
       echo "Uso: ./scdebug [-h | --help] [-sto 'arg'] [-v | -vall] [-k] [prog [arg ...]] ] [-nattch progtoattach ...] [-pattch pid1 ... ]"
-      echo "-h | --help: Muestra ayuda para el funcionamiento del comando"
+      echo "-h | --help: Muestra ayuda para el funcionamiento del comando."
       echo "-sto arg: Especifica opciones para strace, de modo que si se quieren pasar varias opciones, habrá que ponerlas todas entre comillas simples ('...')"
       echo "-v | -vall: Muestra, consultando los archivos de depuración generados por ejecuciones de strace, los resultados por pantalla. La opción -v el último archivo generado y -vall todos los archivos."
       echo "-k: Termina todos los procesos trazadores del usuario, así como todos los procesos trazados."
@@ -43,12 +49,22 @@
 
   # Función que muestra el uso correcto del programa (cuando se está ejecutando la opción -S)
   usage_stop() {
-    echo "Uso: ./scdebug [-h] [-k] -S commName prog [arg...]"
-    echo "-h | --help: Muestra ayuda para el funcionamiento del comando"
-    echo "-k: Mantiene el script en segundo plano."
+    echo "Uso: ./scdebug [-h | --help] [-k] -S commName prog [arg...]"
+    echo "-h | --help: Muestra ayuda para el funcionamiento del comando."
+    echo "-k: Termina todos los procesos trazadores del usuario, así como todos los procesos trazados."
     echo "-S: Opción que detiene el proceso que indiquemos ("prog")."
-    echo "commName: Nombre del comando a forzar su detención."
+    echo "commName: Nombre del comando/comandos a forzar su detención."
     echo "prog [arg...]: Programa ("prog") a ejecutar con sus argumentos ("arg")."
+  }
+
+  usage_g() {
+    echo "Uso: scdebug [-h | --help] [-k] (-g| -gc | -ge) [-inv]"
+    echo "-h | --help: Muestra ayuda para el funcionamiento del comando."
+    echo "-k: Termina todos los procesos trazadores del usuario, así como todos los procesos trazados."
+    echo "-g: Monitoriza procesos detenidos con strace y muestra una tabla resumen."
+    echo "-gc: Monitoriza procesos detenidos con strace y genera una tabla de datos resumen ordenada por llamadas del sistema."
+    echo "-ge: Monitoriza procesos detenidos con strace y genera una tabla de datos resumen ordenada por errores."
+    echo "-inv: Ordena la tabla en orden inverso."
   }
 
   # Función para encontrar el PID del proceso más reciente con el nombre dado (para la opción -nattch)
@@ -246,8 +262,18 @@
       ;;
 
       # Opción [-g | -ge | -gc], en la que se crean tablas de ordenamiento según las opciones indicadas por el usuario.
-      -g )
-      G_FLAG=true           # Hacemos un "flag" para dejar constancia que el usuario ha indicado hacer la opción -g | -ge | -gc
+      -g | -ge | -gc )
+
+      if [ "$1" == "-g" ]; then
+        # En este modo generamos una tabla del trazado del grupo de procesos no ordenada por ningun parametro en especifico
+        G_FLAG=true
+      elif [ "$1" == "-ge" ]; then
+        # En este modo generamos una tabla del trazado del grupo de procesos ordenada por errores
+        GE_FLAG=true
+      elif [ "$1" == "-gc" ]; then
+        # En este modo generamos una tabla del trazado del grupo de procesos ordenada por llamadas al sistema
+        GE_FLAG=true
+      fi
       ;;
 
       # Si no hay más opciones, el resto se considera el comando a ejecutar
@@ -470,7 +496,7 @@
   fi
 
   # Modo para generar tablas de procesos detenidos.
-  if [ $G_FLAG == true ]; then
+  if [ $G_FLAG == true ] || [ $GE_FLAG == true ] || [ $GC_FLAG == true ]; then
     # Guardamos en una variable todos los pids de los procesos que estan detenidos
     stopped_pids="$(ps x -o pid,stat,comm --no-headers | tr -s " " | grep "T traced_" | cut -d" " -f2)"
     # Si no existen procesos detenidos, no podremos generar la tabla, por tanto mostramos un mensaje de error
@@ -481,7 +507,14 @@
 
     # Recorremos cada pid de proceso y lo trazamos con las opciones correspondientes dependiendo de las opciones indicadas
     for pid in $stopped_pids; do
-      strace -c -U -p $pid 2>&1 >/dev/null
+      if [ $GE_FLAG == true ]; then
+        strace -c -S errors -U name,errors,max-time,total-time,calls -p $pid 2>&1 >/dev/null &
+      elif [ $GC_FLAG == true ]; then
+        strace -c -S calls -U name,errors,max-time,total-time,calls -p $pid 2>&1 >/dev/null &
+      else
+        strace -c -U name,errors,max-time,total-time,calls -p $pid 2>&1 >/dev/null &
+      fi
+
       sleep 0.1
       kill -SIGCONT $pid
     done
