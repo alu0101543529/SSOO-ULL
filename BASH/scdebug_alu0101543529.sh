@@ -272,7 +272,7 @@
         GE_FLAG=true
       elif [ "$1" == "-gc" ]; then
         # En este modo generamos una tabla del trazado del grupo de procesos ordenada por llamadas al sistema
-        GE_FLAG=true
+        GC_FLAG=true
       fi
       ;;
 
