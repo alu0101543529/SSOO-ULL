@@ -17,6 +17,15 @@
 #include <optional>
 #include <expected>
 #include <arpa/inet.h>
+#include <atomic>
+#include <csignal>
+#include <cstring>
+
+// Función para enviar el mensaje que proporciona el manejo de señales del programa.
+void signal_handler(int);
+
+//Función para configurar el manejo de señales del programa.
+void setup_signal_handler();
 
 // Función para mostrar ayuda sobre el funcionamiento del programa.
 void show_help();
@@ -37,5 +46,5 @@ std::error_code send_to(int, const std::vector<uint8_t>&, const sockaddr_in&);
 // Función que envía los datos de un fichero (especificado por parámetros) a través de un socket UDP haciendo uso de una dirección IP.
 std::error_code netcp_send_file(const std::string&);
 
-
+// Función que recibe los datos de un fichero (especificado por parámetros) a través de un socket UDP haciendo uso de una dirección IP.
 std::error_code netcp_receive_file(const std::string&);

@@ -12,10 +12,13 @@
 #include "header_file/netcp.h"
 
 int main(int argc, char *argv[]) {
+  // "Inicializamos" el manejo de señales, en caso de que recibiese alguna se invocaría a la función
+  setup_signal_handler();
+
   // Comprobamos si se especifican los argumentos necesarios para el correcto funcionamiento del programa
   if (argc <= 1) { 
     std::cerr << "Error: Faltan argumentos, use la opción -h para ver una descripción de su funcionamiento." << std::endl; 
-    return 1;
+    return EXIT_FAILURE;
   }
 
   std::vector<std::string_view> args(argv + 1, argv + argc);
@@ -26,7 +29,7 @@ int main(int argc, char *argv[]) {
     // Opción -h | --help: Muestra ayuda sobre el funcionamiento del programa
     if (*it == "-h" || *it == "--help") { 
       show_help();
-      return 0;
+      return EXIT_SUCCESS;
     }
 
     // Opción -o | --output: Para especificar un fichero que se leera y se enviara su contenido por la red
@@ -39,7 +42,7 @@ int main(int argc, char *argv[]) {
       // Si no se ha especificado un archivo despues de la opción -o, mostraremos un mensaje de error y saldremos con código de error != 0
       else { 
         std::cerr << "Error: Falta un fichero, por favor introduzca la opción -h para ver una descripción de su funcionamiento." << std::endl; 
-        return 1;
+        return EXIT_FAILURE;
       }
     }
 
@@ -53,10 +56,10 @@ int main(int argc, char *argv[]) {
       // Si no se ha especificado un archivo despues de la opción -o, mostraremos un mensaje de error y saldremos con código de error != 0
       else { 
         std::cerr << "Error: Falta un fichero, por favor introduzca la opción -h para ver una descripción de su funcionamiento." << std::endl; 
-        return 1;
+        return EXIT_FAILURE;
       }
     }
   }
 
-  return 0;
+  return EXIT_SUCCESS;
 }

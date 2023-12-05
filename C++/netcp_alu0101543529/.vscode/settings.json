@@ -81,7 +81,8 @@
     "sstream": "cpp",
     "variant": "cpp",
     "stop_token": "cpp",
-    "thread": "cpp"
+    "thread": "cpp",
+    "csignal": "cpp"
   },
   "files.autoSave": "onFocusChange"
 }
