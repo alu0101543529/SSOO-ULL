@@ -9,14 +9,15 @@
  * @brief  netcp - Un programa en C++ que envía el contenido de archivos por la red mediante el uso de un socket configurado en una dirección IP y puerto UDP específico.
  */
 
-#include "header_file/netcp.h"
+#include "header_files/netcp.h"
+#include "header_files/subprocess.h"
 
 int main(int argc, char *argv[]) {
   // "Inicializamos" el manejo de señales, en caso de que recibiese alguna se invocaría a la función
   setup_signal_handler();
 
   // Comprobamos si se especifican los argumentos necesarios para el correcto funcionamiento del programa
-  if (argc <= 1) { 
+  if (argc <= 1) {
     std::cerr << "Error: Faltan argumentos, use la opción -h para ver una descripción de su funcionamiento." << std::endl; 
     return EXIT_FAILURE;
   }
@@ -36,7 +37,7 @@ int main(int argc, char *argv[]) {
     if (*it == "-o" || *it == "--output") {
       if (++it != end) {
         output_filename = *it;
-        std::cout << "El archivo escogido es: " << output_filename << std::endl;
+        std::cout << "El archivo escogido para el envío de datos es " << output_filename << std::endl;
         netcp_send_file(output_filename);
       }
       // Si no se ha especificado un archivo despues de la opción -o, mostraremos un mensaje de error y saldremos con código de error != 0
@@ -46,11 +47,11 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    //Opción -l: Se pone en modo "escucha" para recibir datos de un fichero
+    // Opción -l: Para especificar un archivo que se pone en modo "escucha" para recibir datos de otro fichero de la red
     if (*it == "-l") {
       if (++it != end) {
         output_filename = *it;
-        std::cout << "El archivo escogido es: " << output_filename << std::endl;
+        std::cout << "El archivo escogido para la recepción de datos es " << output_filename << std::endl;
         netcp_receive_file(output_filename);
       }
       // Si no se ha especificado un archivo despues de la opción -o, mostraremos un mensaje de error y saldremos con código de error != 0
@@ -58,6 +59,16 @@ int main(int argc, char *argv[]) {
         std::cerr << "Error: Falta un fichero, por favor introduzca la opción -h para ver una descripción de su funcionamiento." << std::endl; 
         return EXIT_FAILURE;
       }
+    }
+
+    // Opción -c: Para especificar un comando que se va a envíar la salida estándar/error por la red
+    if (*it == "-c") {
+      subprocess process({"ls", "-a", "/etc"}, subprocess::stdio::out);
+      process.exec();
+      process.stdin_fd();
+      process.stdout_fd();
+      process.stderr_fd();
+      process.wait();
     }
   }
 

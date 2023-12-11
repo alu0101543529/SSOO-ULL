@@ -9,7 +9,7 @@
  * @brief  netcp - Un programa en C++ que envía el contenido de archivos por la red mediante el uso de un socket configurado en una dirección IP y puerto UDP específico.
  */
 
-#include "header_file/netcp.h"
+#include "header_files/netcp.h"
 
 /**
  * @brief Función para enviar el mensaje que proporciona el manejo de señales del programa.
@@ -55,6 +55,8 @@ void show_help() {
  * @return Devuelve un código de error si no se ha podido leer correctamente del archivo, o un código de éxito si ocurre lo contrario.
  */
 std::error_code read_file(int fd, std::vector<uint8_t>& buffer) {
+  std::cout << "Leyendo el fichero..." << std::endl;
+
   ssize_t bytes_read = read(fd, buffer.data(), buffer.size());
 
   // Si no se ha podido leer nada del fichero, mostraremos un mensaje de error y salimos con código de error != 0
@@ -75,6 +77,8 @@ std::error_code read_file(int fd, std::vector<uint8_t>& buffer) {
  * @return Devuelve el socket enlazado con la dirección y el puerto especificados por parámetros.
  */
 make_socket_result make_socket(std::optional<sockaddr_in> address = std::nullopt) {
+  std::cout << "Creando el socket..." << std::endl;  
+  
   // Creamos un socket de datagramas UDP (SOCK_DGRAM), en el dominio de direcciones IPv4 (AF_INET)
   int socket_fd_s = socket(AF_INET, SOCK_DGRAM, 0);
   
@@ -85,10 +89,12 @@ make_socket_result make_socket(std::optional<sockaddr_in> address = std::nullopt
     return std::unexpected(error);
   }
 
+  std::cout << "Enlazando el socket a la dirección IP..." << std::endl;  
+
   int result = bind(socket_fd_s, reinterpret_cast<const sockaddr*>(&address.value()), sizeof(address.value()));
 
   if (result < 0) {
-    std::cerr << "Error: No se ha podido asignar una dirección IP correcta." << std::endl; 
+    std::cerr << "Error: No se ha podido asignar una dirección IP correcta." << std::endl;
     std::error_code error(errno, std::system_category());
     return std::unexpected(error);
   }
@@ -103,6 +109,8 @@ make_socket_result make_socket(std::optional<sockaddr_in> address = std::nullopt
  * @return Devuelve la dirección IP configurada con el puerto especificado por parámetros.
  */
 std::optional<sockaddr_in> make_ip_address(const std::optional<std::string> ip_address = std::nullopt, uint16_t port = 0) {
+  std::cout << "Configurando la dirección IP " << ip_address.value() << " al puerto " << port << "..." << std::endl;  
+
   // Configuramos la direeción IP en el puerto especificado por parámetros (port)
   sockaddr_in remote_address{};
   remote_address.sin_family = AF_INET;
@@ -118,8 +126,8 @@ std::optional<sockaddr_in> make_ip_address(const std::optional<std::string> ip_a
     }
 
     if (inet_aton(ip.c_str(), &remote_address.sin_addr) == 0) {
-      // Si no se ha podido convertit la dirección IP correctamente, mostramos un mensaje de error, y salimos con código de error != 0
-      std::cerr << "Error: La dirección IP propocionada, está en un formato incorrecto." << std::endl;
+      // Si no se ha podido convertir la dirección IP correctamente, mostramos un mensaje de error, y salimos con código de error != 0
+      std::cerr << "Error: La dirección IP propocionada está en un formato incorrecto." << std::endl;
       return std::nullopt;
     }
   }
@@ -199,6 +207,7 @@ std::error_code netcp_send_file(const std::string& filename) {
     return std::error_code(errno, std::system_category());
   }
 
+  std::cout << "Abriendo el fichero..." << std::endl;
   // Abrimos el archivo y lo guardamos en un descriptor de fichero
   int fd_s = open(filename.c_str(), O_RDONLY, 0);
   // Si no se ha podido abrir, mostramos un mensaje de error y salimos con código de error != 0
@@ -212,6 +221,7 @@ std::error_code netcp_send_file(const std::string& filename) {
   // Si no hemos podido crear correctamente la dirección IP, mostramos un mensaje de error y salimos con código de error != 0
   if (!address) {
     std::cerr << "Error: No se ha podido crear la dirección IP." << std::endl;
+    std::cout << "Cerrando el descriptor de fichero..." << std::endl;
     close(fd_s);
     return std::error_code(errno, std::system_category());
   }
@@ -221,20 +231,26 @@ std::error_code netcp_send_file(const std::string& filename) {
   // Si no hemos podido crear correctamente el socket, mostramos un mensaje de error y salimos con código de error != 0
   if (!socket_result) {
     std::cerr << "Error: No se ha podido crear el socket." << std::endl;
+    std::cout << "Cerrando el descriptor de fichero..." << std::endl;
     close(fd_s);
     return std::error_code(errno, std::system_category());
   }
   // Si se ha creado correctamente lo guardamos en una variable
   int socket_fd_s = *socket_result;
 
+  // Obtenemos el puerto y la dirección IP desde las variables de entorno
   const char* netcp_port = std::getenv("NETCP_PORT");
-  const char* ip_address = std::getenv("NETCP_IP");
+  const char* netcp_ip = std::getenv("NETCP_IP");
 
-  auto address_send = make_ip_address(ip_address, std::stoi(netcp_port));
+  uint16_t port = (netcp_port != nullptr) ? std::stoi(netcp_port) : 8080;
+  std::optional<std::string> ip_address = (netcp_ip != nullptr) ? std::make_optional(netcp_ip) : "127.0.0.1";
+
+  auto address_send = make_ip_address(ip_address, port);
 
   // Enviamos el mensaje del fichero por bloques de 4 KiB de datos
   std::vector<uint8_t> buffer(4096UL);
 
+  std::cout << "Enviando el fichero..." << std::endl;
   // Empezamos un bucle que mientras que haya datos para leer en el fichero, se van a estar leyendo-enviando
   while (true && !quit_requested) {
     ssize_t bytesRead = read(fd_s, buffer.data(), buffer.size());
@@ -242,6 +258,7 @@ std::error_code netcp_send_file(const std::string& filename) {
     // Si no hemos podido leer correctamente el contenido del fichero, mostramos un mensaje de error y salimos con código de error != 0
     if (bytesRead == -1) {
       std::cerr << "Error: No se puede leer el fichero " << filename << "." << std::endl;
+      std::cout << "Cerrando los descriptores de fichero..." << std::endl;
       close(socket_fd_s);
       close(fd_s);
       return std::error_code(errno, std::system_category());
@@ -255,6 +272,7 @@ std::error_code netcp_send_file(const std::string& filename) {
     // Enviamos el mensaje del fichero que hemos leído previamente, en caso de fallo, mostramos un mensaje de error y salimos con código de error != 0
     if (send_to(socket_fd_s, buffer, *address_send)) {
       std::cerr << "Error: No se ha podido enviar el bloque por el socket." << std::endl;
+      std::cout << "Cerrando los descriptores de fichero..." << std::endl;
       close(socket_fd_s);
       close(fd_s);
       return std::error_code(errno, std::system_category());
@@ -265,9 +283,12 @@ std::error_code netcp_send_file(const std::string& filename) {
   // Se invoca a la función send_to de forma vacía, para terminar que termine el envío de archivos automaticamente
   send_to(socket_fd_s, buffer, *address_send);
 
+  std::cout << "Cerrando los descriptores de fichero..." << std::endl;
   // Si el mensaje se ha podido enviar cerramos tanto el descriptor de fichero del archivo que leímos como del socket que creamos
   close(socket_fd_s);
   close(fd_s);
+  
+  std::cout << "El envío de datos ha finalizado correctamente." << std::endl;
 
   return std::error_code(0, std::system_category());
 }
@@ -297,16 +318,18 @@ std::error_code netcp_receive_file(const std::string& filename) {
   auto socket_result = make_socket(*address);
   // Si no hemos podido crear correctamente el socket, mostramos un mensaje de error y salimos con código de error != 0
   if (!socket_result) {
-    std::cerr << "Error: No se ha podido crear el socket correctamente." << std::endl;
+    std::cerr << "Error: No se ha podido crear el socket." << std::endl;
     return std::error_code(errno, std::system_category());
   }
 
   int socket_fd = *socket_result;
 
+  std::cout << "Abriendo el fichero..." << std::endl;
   // Abrir el archivo de destino en modo escritura
   int fd_s = open(filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   if (fd_s == -1) {
     std::cerr << "Error: No se puede abrir el fichero " << filename << "." << std::endl;
+    std::cout << "Cerrando el descriptor de fichero..." << std::endl;
     close(socket_fd);
     return std::error_code(errno, std::system_category());
   }
@@ -315,6 +338,8 @@ std::error_code netcp_receive_file(const std::string& filename) {
   // Creamos un buffer del que iremos recibiendo los datos para irlos escribiendo poco a poco
   std::vector<uint8_t> buffer(4096UL);
 
+  std::cout << "Recibiendo datos al fichero..." << std::endl;
+  std::cout << "Escribiendo datos en el fichero..." << std::endl;
   // Hacemos un bucle infinito, para enviar los datos, y su condición de parada será cuando el buffer de datos no tenga nada para recibir
   while (true && !quit_requested) {
     auto result = receive_from(socket_fd, buffer, address.value());
@@ -322,6 +347,7 @@ std::error_code netcp_receive_file(const std::string& filename) {
     if (result) {
       // Si no hemos podido recibir los datos correctamente por el socket, mostramos un mensaje de error y salimos con código de error != 0
       std::cerr << "Error: No se han podido recibir los datos por el socket correctamente." << std::endl;
+      std::cout << "Cerrando los descriptores de fichero..." << std::endl;
       close(fd_s);
       close(socket_fd);
       return std::error_code(errno, std::system_category());
@@ -334,15 +360,19 @@ std::error_code netcp_receive_file(const std::string& filename) {
     if (write_file(fd_s, buffer)) {
       // Si no hemos podido escribir los datos correctamente en el fichero, mostramos un mensaje de error y salimos con código de error != 0
       std::cerr << "Error: No se ha podido escribir en el fichero " << filename << "." << std::endl;
+      std::cout << "Cerrando los descriptores de fichero..." << std::endl;
       close(fd_s);
       close(socket_fd);
       return std::error_code(errno, std::system_category());
     }
   }
 
+  std::cout << "Cerrando los descriptores de fichero..." << std::endl;
   // Si el mensaje se ha podido tanto recibir como escribir en el fichero especificado, cerramos tanto el descriptor de fichero del archivo que leímos como del socket que creamos
   close(fd_s);
   close(socket_fd);
+
+  std::cout << "La recepción de datos ha finalizado correctamente." << std::endl;
 
   return std::error_code(0, std::system_category());
 }
