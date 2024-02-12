@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
         std::cout << "El archivo escogido para la recepción de datos es " << output_filename << std::endl;
         netcp_receive_file(output_filename);
       }
-      // Si no se ha especificado un archivo despues de la opción -o, mostraremos un mensaje de error y saldremos con código de error != 0
+      // Si no se ha especificado un archivo despues de la opción -l, mostraremos un mensaje de error y saldremos con código de error != 0
       else { 
         std::cerr << "Error: Falta un fichero, por favor introduzca la opción -h para ver una descripción de su funcionamiento." << std::endl; 
         return EXIT_FAILURE;
@@ -63,12 +63,16 @@ int main(int argc, char *argv[]) {
 
     // Opción -c: Para especificar un comando que se va a envíar la salida estándar/error por la red
     if (*it == "-c") {
-      subprocess process({"ls", "-a", "/etc"}, subprocess::stdio::out);
-      process.exec();
-      process.stdin_fd();
-      process.stdout_fd();
-      process.stderr_fd();
-      process.wait();
+      std::vector<std::string> command = {"ls", "-l"};
+      subprocess myProcess(command, subprocess::stdio::out);
+
+      if (myProcess.exec() == std::error_code(0, std::system_category())) {
+        // Proceso iniciado con éxito
+        std::cout << "Proceso iniciado con PID: " << myProcess.pid() << std::endl;
+      } else {
+        // Error al iniciar el proceso
+        std::cerr << "Error al iniciar el proceso." << std::endl;
+      }
     }
   }
 

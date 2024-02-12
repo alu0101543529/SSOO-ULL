@@ -63,7 +63,7 @@ class subprocess {
   std::vector<std::string> args;
   subprocess::stdio redirected_io;
   pid_t child_pid;
-  int stdin_pipe[2], stdout_pipe[2], stderr_pipe[2];
+  int std_pipe[2];
 };
 
 #endif // SUBPROCESS_H

@@ -10,6 +10,7 @@
 */
 
 #include "header_files/subprocess.h"
+#include <iostream>
 
 /**
  * @brief Constructor de subprocess
@@ -17,21 +18,19 @@
  * @param redirected_io: miembro de la enumeración `stdio` que indica cómo se manejará la entrada/salida estándar del proceso hijo.
  */
 subprocess::subprocess(const std::vector<std::string>& args, subprocess::stdio redirected_io) : args(args), redirected_io(redirected_io), child_pid(-1) {
-  pipe(stdin_pipe);
-  pipe(stdout_pipe);
-  pipe(stderr_pipe);
+  if (pipe(std_pipe) < 0) { 
+    std::cerr << "Error: No se ha podido cerar la tubería correctamente." << std::endl;
+    exit(EXIT_FAILURE); 
+  }
 }
 
 /**
  * @brief Destructor de subprocess
  */
 subprocess::~subprocess() {
-  close(stdin_pipe[0]);
-  close(stdin_pipe[1]);
-  close(stdout_pipe[0]);
-  close(stdout_pipe[1]);
-  close(stderr_pipe[0]);
-  close(stderr_pipe[1]);
+  close(std_pipe[0]);
+  close(std_pipe[1]);
+  close(std_pipe[2]);
 }
 
 /**
@@ -49,19 +48,26 @@ bool subprocess::is_alive() {
 std::error_code subprocess::exec() {
   child_pid = fork();
 
+  // Si no se ha podido cerar el proceso hijo (la llamada al sistema fork() falló), mostraremos un mensaje de error y saldremos con código de error != 0
   if (child_pid == -1) {
+    std::cerr << "Error: No se ha podido crear el proceso hijo." << std::endl;
     return std::error_code(errno, std::system_category());
   }
 
-  if (child_pid == 0) {  // Child process
+  // Dentro de este if solo entra el proceso hijo
+  if (child_pid == 0) {
     setup_child_process();
     
+    // Como la llamada execvp() requiere que el vector de argumentos termine en un puntero nulo, se lo insertamos creando un nuevo vector
     std::vector<const char*> c_args;
     for (const auto& arg : args) { c_args.push_back(arg.c_str()); }
-    c_args.push_back(nullptr); // execvp requires a null-terminated array
+    c_args.push_back(nullptr);
 
-    execvp(args[0].c_str(), const_cast<char* const*>(c_args.data()));
-    return std::error_code(errno, std::system_category());  // In case execvp fails
+    // Si no se ha podido ejecutar el comando (la llamada al sistema execvp() falló), mostraremos un mensaje de error y saldremos con código de error != 0
+    if (!(execvp(args[0].c_str(), const_cast<char* const*>(c_args.data())))) {
+      std::cerr << "Error: No se ha podido ejecutar el comando." << std::endl;
+      return std::error_code(errno, std::system_category());
+    }
   }
 
   return std::error_code(0, std::system_category());
@@ -88,7 +94,9 @@ std::error_code subprocess::wait() {
  */
 std::error_code subprocess::kill() {
   if (child_pid != -1) {
-    if (killpg(child_pid, SIGKILL) == -1) {
+    if (killpg(child_pid, SIGTERM) == -1) {
+      // Si no se ha podido matar al comando (la llamada al sistema killpg() falló), mostraremos un mensaje de error y saldremos con código de error != 0
+      std::cerr << "Error: No se ha podido matar al proceso hijo con la señal SIGTERM." << std::endl;
       return std::error_code(errno, std::system_category());
     }
     child_pid = -1;
@@ -108,32 +116,22 @@ pid_t subprocess::pid() {
  * @brief Métodos que proporcionan los descriptores de archivos de los pipes asociados.
  * @return Devuelven los descriptores de archivos asociados con la entrada/salida estándar del proceso hijo, dependiendo del tipo de redirección.
  */
-int subprocess::stdin_fd() {
-  return stdin_pipe[redirected_io == stdio::in ? 1 : 0];
-}
+int subprocess::stdin_fd() { return std_pipe[redirected_io == stdio::in ? 1 : 0]; }
 
-int subprocess::stdout_fd() {
-  return stdout_pipe[redirected_io == stdio::out ? 0 : (redirected_io == stdio::outerr ? 0 : 1)];
-}
+int subprocess::stdout_fd() { return std_pipe[redirected_io == stdio::out ? 0 : (redirected_io == stdio::outerr ? 0 : 1)]; }
 
-int subprocess::stderr_fd() {
-  return stderr_pipe[redirected_io == stdio::err ? 0 : (redirected_io == stdio::outerr ? 1 : 2)];
-}
+int subprocess::stderr_fd() { return std_pipe[redirected_io == stdio::err ? 0 : (redirected_io == stdio::outerr ? 1 : 2)]; }
 
 /**
  * @brief Métodos que configura el entorno del proceso hijo cerrando extremos no utilizados de los pipes y duplicando los descriptores de archivos necesarios para redirigir la entrada/salida estándar.
  * @return Devuelven los descriptores de archivos asociados con la entrada/salida estándar del proceso hijo, dependiendo del tipo de redirección.
  */
 void subprocess::setup_child_process() {
-  close(stdin_pipe[1]);
-  close(stdout_pipe[0]);
-  close(stderr_pipe[0]);
+  close(std_pipe[0]);
 
-  dup2(stdin_pipe[0], STDIN_FILENO);
-  dup2(stdout_pipe[1], STDOUT_FILENO);
-  dup2(stderr_pipe[1], STDERR_FILENO);
+  if (redirected_io == stdio::in) { dup2(std_pipe[0], STDIN_FILENO); }
+  else if (redirected_io == stdio::out) { dup2(std_pipe[1], STDOUT_FILENO); }
+  else if (redirected_io == stdio::err) { dup2(std_pipe[1], STDERR_FILENO); }
 
-  close(stdin_pipe[0]);
-  close(stdout_pipe[1]);
-  close(stderr_pipe[1]);
+  close(std_pipe[1]);
 }

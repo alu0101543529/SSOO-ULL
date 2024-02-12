@@ -10,6 +10,8 @@
  */
 
 #include "header_files/netcp.h"
+#include <thread>
+#include <chrono>
 
 /**
  * @brief Función para enviar el mensaje que proporciona el manejo de señales del programa.
@@ -95,6 +97,7 @@ make_socket_result make_socket(std::optional<sockaddr_in> address = std::nullopt
 
   if (result < 0) {
     std::cerr << "Error: No se ha podido asignar una dirección IP correcta." << std::endl;
+    close(socket_fd_s);
     std::error_code error(errno, std::system_category());
     return std::unexpected(error);
   }
@@ -278,7 +281,7 @@ std::error_code netcp_send_file(const std::string& filename) {
       return std::error_code(errno, std::system_category());
     }
     // En grandes ficheros, debemos esperar un tiempo prudencial a que se envien todos los datos cargados en el buffer
-    usleep(1000);
+    std::this_thread::sleep_for(std::chrono::nanoseconds(1));
   }
   // Se invoca a la función send_to de forma vacía, para terminar que termine el envío de archivos automaticamente
   send_to(socket_fd_s, buffer, *address_send);
